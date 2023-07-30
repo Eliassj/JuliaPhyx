@@ -1,0 +1,13 @@
+name = "JuliaPhyx"
+uuid = "028e914b-87cf-497a-b01f-93cb1c62367b"
+authors = ["Eliassj <elias.sjolin@gmail.com>"]
+version = "1.0.0-DEV"
+
+[compat]
+julia = "1.9"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
