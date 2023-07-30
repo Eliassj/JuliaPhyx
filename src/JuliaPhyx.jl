@@ -1,5 +1,6 @@
 module JuliaPhyx
 
-# Write your package code here.
-
+function greet()
+    println("Hello")
+end
 end
