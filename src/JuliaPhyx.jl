@@ -77,18 +77,57 @@ function PhyOutput(
     end
 end
 
+
 function spikemmap(p::PhyOutput)
     n = parse(Int, p._meta["nSavedChans"])
     s = Int(parse(Int, p._meta["fileSizeBytes"]) / (2*n))
     tmp = open(p._binpath, "r")
-    m = mp.mmap(tmp, Matrix{Int16}, (n, s), 0)
+    m::Array{Int16, 2} = mp.mmap(tmp, Array{Int16, 2}, (n, s), 0)
     close(tmp)
     return m
 end
 
-function tovolts()
+function tovolts(meta::Dict{SubString{String}, SubString{String}}, i::Union{Vector{Int16}, Array{Int16}})
+    Imax::Float64 = parse(Float64, meta["imMaxInt"])
+    Vmax::Float64 = parse(Float64, meta["imAiRangeMax"])
+    if meta["imDatPrb_type"] == "0"
+        tbl=meta["~imroTbl"]
+        tbl = split(tbl, ")(")
+        tbl = split(tbl[2], " ")
+        gain = parse(Int, tbl[4])
+    else
+        gain = 80
+    end
+    cfactor = Vmax / Imax / gain
+    return i .*cfactor
+end
+
+function getchan(
+    p::PhyOutput,
+    ch::Union{Int, Vector{Int}, UnitRange{Int64}},
+    tmin::Union{Float64, Int},
+    tmax::Union{Float64, Int},
+    converttoV::Bool = true
+    )
+
+    # Convert times (IN SECONDS) to sample frequencies
+    # Add 1 since indexing is 1-based
+    samplfrq::Float64 = parse(Float64, p._meta["imSampRate"])
+    tmin::Int64 = Int(round((tmin * samplfrq) + 1))
+    tmax::Int64 = Int(round((tmax * samplfrq) + 1))
+    filemax::Int64 = Int64(parse(Int64, p._meta["fileSizeBytes"]) / parse(Int64, p._meta["nSavedChans"]) / 2)
+    if tmax > filemax
+        ArgumentError("tmax may at most be $(p._meta["fileTimeSecs"])")
+    end
+    # Memory map data and load the selected chunks
+    karta = spikemmap(p)
     
+    r = karta[ch, tmin:tmax]
+
+    r = tovolts(p._meta, r)
+    return r
 end
 
 end
 
+Plots.pl
