@@ -96,9 +96,9 @@ function tovolts(meta::Dict{SubString{String}, SubString{String}}, i::Union{Vect
         tbl = split(tbl[2], " ")
         gain = parse(Int, tbl[4])
     else
-        gain = 80
+        gain::Float64 = 80
     end
-    cfactor = Vmax / Imax / gain
+    cfactor::Float64 = Vmax / Imax / gain
     return i .*cfactor
 end
 
@@ -111,11 +111,13 @@ end
     converttoV::Bool = true
     )
 
-`p::Phyoutput`: Created by JuliaPhyx.PhyOutput()
-`ch::Union{Int, Vector{Int}, UnitRange{Int64}}`: Channel index (1-based) to extract. May be a single `Int`, a `Vector{Int}` or a `UnitRange{Int64}`.
-`tmin::Union{Float64, Int}`: Time in seconds to begin from.
-`tmax::Union{Float64, Int}`: Time in seconds to stop at.
-`Converttov::Bool`: Should the values be converted to volts?
+`p`: Created by JuliaPhyx.PhyOutput()
+`ch`: Channel index (1-based) to extract. May be a single `Int`, a `Vector{Int}` or a `UnitRange{Int64}`.
+`tmin`: Time in seconds to begin from.
+`tmax`: Time in seconds to stop at.
+`ConverttoV`: Should the values be converted to volts?
+
+See also [`PhyOutput`](@ref)
 """
 function getchan(
     p::PhyOutput,
@@ -135,14 +137,14 @@ function getchan(
         ArgumentError("tmax may at most be $(p._meta["fileTimeSecs"])")
     end
     # Memory map data and load the selected chunks
-    karta = spikemmap(p)
+    karta::Matrix{Int16} = spikemmap(p)
     
-    r = karta[ch, tmin:tmax]
+    r::Matrix{Int16} = karta[ch, tmin:tmax]
 
     if converttoV
         r = tovolts(p._meta, r)
     end
-    
+
     return r
 end
 
