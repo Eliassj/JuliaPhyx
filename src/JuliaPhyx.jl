@@ -14,10 +14,10 @@ const mp = Mmap
 
 # Initialize a PhyOutput object
 struct PhyOutput
-    _spiketimes
-    _info
-    _meta
-    _binpath
+    _spiketimes::Matrix{UInt64}
+    _info::DataFrames.DataFrame
+    _meta::Dict{SubString{String}, SubString{String}}
+    _binpath::String
 
     """
     PhyOutput(
@@ -50,10 +50,10 @@ function PhyOutput(
             glxdir = phydir
         end
         println("Importing good clusters")
-        clusters = convert(Vector{UInt64}, NPZ.npzread(phydir*"\\spike_clusters.npy"))
-        times = NPZ.npzread(phydir*"\\spike_times.npy")[:,1]
-        spiketimes = [clusters times]
-        info = CSV.read(phydir*"\\cluster_info.tsv", DataFrame)
+        clusters::Vector{UInt64} = convert(Vector{UInt64}, NPZ.npzread(phydir*"\\spike_clusters.npy"))
+        times::Vector{UInt64} = NPZ.npzread(phydir*"\\spike_times.npy")[:,1]
+        spiketimes::Matrix{UInt64} = [clusters times]
+        info::DataFrames.DataFrame = CSV.read(phydir*"\\cluster_info.tsv", DataFrame)
 
         isgood(group) = group == "good"
         info = subset(info, :group => ByRow(isgood), skipmissing = true)
@@ -62,8 +62,8 @@ function PhyOutput(
         spiketimes = spiketimes[ininfo.(spiketimes[:,1]),:]
 
         glxfiles = readdir(glxdir, join = true)
-        binfile = [f for f in glxfiles if f[length(f)-6:length(f)] == ".ap.bin"][1]
-        metafile = [f for f in glxfiles if f[length(f)-7:length(f)] == ".ap.meta"][1]
+        binfile::String = [f for f in glxfiles if f[length(f)-6:length(f)] == ".ap.bin"][1]
+        metafile::String = [f for f in glxfiles if f[length(f)-7:length(f)] == ".ap.meta"][1]
 
         # Read metadata
         tmp = open(metafile, "r")
@@ -79,9 +79,9 @@ end
 
 
 function spikemmap(p::PhyOutput)
-    n = parse(Int, p._meta["nSavedChans"])
-    s = Int(parse(Int, p._meta["fileSizeBytes"]) / (2*n))
-    tmp = open(p._binpath, "r")
+    n::Int = parse(Int, p._meta["nSavedChans"])
+    s::Int = Int(parse(Int, p._meta["fileSizeBytes"]) / (2*n))
+    tmp::IOStream = open(p._binpath, "r")
     m::Array{Int16, 2} = mp.mmap(tmp, Array{Int16, 2}, (n, s), 0)
     close(tmp)
     return m
@@ -91,7 +91,7 @@ function tovolts(meta::Dict{SubString{String}, SubString{String}}, i::Union{Vect
     Imax::Float64 = parse(Float64, meta["imMaxInt"])
     Vmax::Float64 = parse(Float64, meta["imAiRangeMax"])
     if meta["imDatPrb_type"] == "0"
-        tbl=meta["~imroTbl"]
+        tbl = meta["~imroTbl"]
         tbl = split(tbl, ")(")
         tbl = split(tbl[2], " ")
         gain = parse(Int, tbl[4])
@@ -102,6 +102,21 @@ function tovolts(meta::Dict{SubString{String}, SubString{String}}, i::Union{Vect
     return i .*cfactor
 end
 
+"""
+    getchan(
+    p::PhyOutput,
+    ch::Union{Int, Vector{Int}, UnitRange{Int64}},
+    tmin::Union{Float64, Int},
+    tmax::Union{Float64, Int},
+    converttoV::Bool = true
+    )
+
+`p::Phyoutput`: Created by JuliaPhyx.PhyOutput()
+`ch::Union{Int, Vector{Int}, UnitRange{Int64}}`: Channel index (1-based) to extract. May be a single `Int`, a `Vector{Int}` or a `UnitRange{Int64}`.
+`tmin::Union{Float64, Int}`: Time in seconds to begin from.
+`tmax::Union{Float64, Int}`: Time in seconds to stop at.
+`Converttov::Bool`: Should the values be converted to volts?
+"""
 function getchan(
     p::PhyOutput,
     ch::Union{Int, Vector{Int}, UnitRange{Int64}},
@@ -124,10 +139,12 @@ function getchan(
     
     r = karta[ch, tmin:tmax]
 
-    r = tovolts(p._meta, r)
+    if converttoV
+        r = tovolts(p._meta, r)
+    end
+    
     return r
 end
 
 end
 
-Plots.pl
