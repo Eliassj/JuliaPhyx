@@ -5,8 +5,8 @@ const dt = DataFrames
 using Gtk
 using MAT
 using NPZ
-using Plots
-const plt = Plots
+using CairoMakie
+const plt = CairoMakie
 using CSV
 using Mmap
 const mp = Mmap
@@ -78,6 +78,8 @@ Create a PhyOutput struct containing spiketimes(_spiketimes), info(_info), spike
 end
 
 
+
+
 function spikemmap(p::PhyOutput)
     n::Int = parse(Int, p._meta["nSavedChans"])
     s::Int = Int(parse(Int, p._meta["fileSizeBytes"]) / (2*n))
@@ -116,6 +118,8 @@ end
 `tmin`: Time in seconds to begin from.
 `tmax`: Time in seconds to stop at.
 `ConverttoV`: Should the values be converted to volts?
+
+Uses the path stored in p._binfile and p._meta to import channels from the correct binfile in the correct way.
 
 See also [`PhyOutput`](@ref)
 """
@@ -162,15 +166,6 @@ function getchan(
     # Memory map data and load the selected chunks
     karta::Matrix{Int16} = spikemmap(p)
     len::UnitRange{Int64} = tmin:tmax
-    #r::Matrix{Int16} = Matrix{Int16}(undef, length(len), length(ch))
-#
-    #
-    #for (nch, c) in enumerate(ch)
-    #    for (ntim, t) in enumerate(len)
-    #        r[ntim, nch] = karta[c, t]
-    #    end
-    #end
-
 
     r::Union{Matrix{Int16}, Vector{Int16}} = karta[ch, len]
 
@@ -184,7 +179,7 @@ function getchan(
     end
 
     function writechanbin(
-        channel::Union{Matrix{Union{Int16, Float64}}, Vector{Union{Int16, Float64}}},
+        channel::Union{Matrix{Float64}, Matrix{Int16}, Vector{Int16}, Vector{Float64}},
         dest::String="")
 
         if dest == ""
@@ -198,6 +193,23 @@ function getchan(
             close(file)
         end   
         println("written to: ", dest)
+    end
+
+    function importchanint16(path::String="", format = "Int16" )
+        if path == ""
+            path = Gtk.open_dialog_native("Select trigger file", action=GtkFileChooserAction.GTK_FILE_CHOOSER_ACTION_OPEN)
+        end
+        if path[end-3:end] == ".bin"
+            tmp::IOStream = open(path, "r")
+            res = reinterpret(Int16, read(tmp))
+            close(tmp)
+            return res
+        elseif path[end-3:end] == ".csv"
+            res2::Matrix = Matrix(CSV.read(path, DataFrame, header = false))
+            return res2
+        else
+            ArgumentError("Only '.bin' or '.csv' files allowed.")
+        end
     end
 
 end
