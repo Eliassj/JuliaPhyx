@@ -33,7 +33,7 @@ struct PhyOutput
 
 Create a PhyOutput struct containing spiketimes(_spiketimes), info(_info), spikeGLX metadata(_meta) and the path to the associated .ap.bin file(_binpath).
 """
-function PhyOutput(
+    function PhyOutput(
         phydir::String = "",
         glxdir::String = "",
         same::Bool = false
@@ -73,8 +73,8 @@ function PhyOutput(
         metadict = Dict(i[1] => i[2] for i in metaraw)
 
         new(spiketimes, info, metadict, binfile)
-        
-    end
+
+        end
 end
 
 
@@ -123,30 +123,81 @@ function getchan(
     p::PhyOutput,
     ch::Union{Int, Vector{Int}, UnitRange{Int64}},
     tmin::Union{Float64, Int},
-    tmax::Union{Float64, Int},
+    tmax::Union{Float64, Int, String},
     converttoV::Bool = true
     )
 
-    # Convert times (IN SECONDS) to sample frequencies
-    # Add 1 since indexing is 1-based
-    samplfrq::Float64 = parse(Float64, p._meta["imSampRate"])
-    tmin::Int64 = Int(round((tmin * samplfrq) + 1))
-    tmax::Int64 = Int(round((tmax * samplfrq) + 1))
     filemax::Int64 = Int64(parse(Int64, p._meta["fileSizeBytes"]) / parse(Int64, p._meta["nSavedChans"]) / 2)
-    if tmax > filemax
-        ArgumentError("tmax may at most be $(p._meta["fileTimeSecs"])")
+    samplfrq::Float64 = parse(Float64, p._meta["imSampRate"])
+    # Convert times (IN SECONDS) to sample frequencies
+    # Add 1 since indexing is 1-based(?)
+
+    #Check if tmin < 0
+    if tmin < 0
+        ArgumentError("tmin must be above 0")
     end
+
+    # Check if max time should be used
+    if typeof(tmax) == String
+        if tmax != "max"
+            ArgumentError("tmax must be a number or the string 'max'")
+        end
+        tmax = filemax
+    else
+        # Convert tmax to sample frequency
+        tmax::Int64 = Int(round((tmax * samplfrq))) + 1::Int64
+    end
+    # Check if tmin >= tmax
+    if tmin >= tmax
+        ArgumentError("tmin must be <tmax")
+    end
+
+    # Convert tmin to sample frequency
+    tmin::Int64 = Int(round((tmin * samplfrq))) + 1::Int64
+    
+    if tmax > filemax
+        ArgumentError("tmax larger than length of recording")
+    end
+
     # Memory map data and load the selected chunks
     karta::Matrix{Int16} = spikemmap(p)
-    
-    r::Matrix{Int16} = karta[ch, tmin:tmax]
+    len::UnitRange{Int64} = tmin:tmax
+    #r::Matrix{Int16} = Matrix{Int16}(undef, length(len), length(ch))
+#
+    #
+    #for (nch, c) in enumerate(ch)
+    #    for (ntim, t) in enumerate(len)
+    #        r[ntim, nch] = karta[c, t]
+    #    end
+    #end
+
+
+    r::Union{Matrix{Int16}, Vector{Int16}} = karta[ch, len]
 
     if converttoV
-        r = tovolts(p._meta, r)
+        conv::Union{Matrix{Float64}, Vector{Float64}} = tovolts(p._meta, r)
+        return conv
+    else
+        return r
     end
 
-    return r
-end
+    end
+
+    function writechanbin(
+        channel::Union{Matrix{Union{Int16, Float64}}, Vector{Union{Int16, Float64}}},
+        dest::String="")
+
+        if dest == ""
+            dest = Gtk.open_dialog_native("Select save location", action=GtkFileChooserAction.SAVE)
+        end
+        if dest[end-3:end] != ".bin"
+            dest = dest*".bin"
+        end
+        open(dest, "w") do file
+            write(file, channel)            
+            close(file)
+        end   
+        println("written to: ", dest)
+    end
 
 end
-
